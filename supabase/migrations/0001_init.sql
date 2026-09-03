@@ -1,7 +1,7 @@
-create extension if not exists "uuid-ossp";
+create extension if not exists pgcrypto;
 
 create table if not exists public.employees (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   email text unique not null,
   full_name text not null,
   pod text,
@@ -11,7 +11,7 @@ create table if not exists public.employees (
 );
 
 create table if not exists public.daily_reports (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   employee_id uuid not null references public.employees(id) on delete cascade,
   report_date date not null,
   blockers text,
@@ -25,7 +25,7 @@ create table if not exists public.daily_reports (
 create index if not exists idx_daily_reports_report_date on public.daily_reports(report_date);
 
 create table if not exists public.training_tasks (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   daily_report_id uuid not null references public.daily_reports(id) on delete cascade,
   title text not null,
   learning_type text not null,
@@ -40,7 +40,7 @@ create index if not exists idx_training_tasks_report ON public.training_tasks(da
 create index if not exists idx_training_tasks_eta ON public.training_tasks(eta_date);
 
 create table if not exists public.certification_progress (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   daily_report_id uuid not null references public.daily_reports(id) on delete cascade,
   istqb_done boolean not null default false,
   istqb_target_date date,
