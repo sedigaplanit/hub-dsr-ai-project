@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@shared": ["../api/src/shared/index.ts"],
+      "@shared/*": ["../api/src/shared/*"]
+    },
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "jsx": "react-jsx",
+    "types": ["jest", "node"],
+    "verbatimModuleSyntax": false,
+    "allowArbitraryExtensions": true,
+    "esModuleInterop": true
+  },
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.d.ts", "../api/src/shared"]
+}

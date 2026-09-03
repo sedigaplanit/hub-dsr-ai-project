@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+apps/web/dist/
+apps/api/dist/
+.DS_Store
+*.log
+!.vscode/extensions.json
+apps/web/node_modules/
+apps/api/node_modules/
+supabase/.temp/
+.env*
+*.tsbuildinfo
+coverage/
