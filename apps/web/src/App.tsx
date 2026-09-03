@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import type { DailyReportPayload, TrainingStatus } from '@shared'
@@ -15,6 +15,28 @@ import './App.css'
 
 const queryClient = new QueryClient()
 type TrainingFormRow = ReturnType<typeof createEmptyTrainingRow>
+type AppView = 'user-login' | 'admin-login' | 'user-app' | 'admin-app'
+type Session = { role: 'user' | 'admin'; username: string }
+
+const getViewFromHash = (hash: string): AppView => {
+  if (hash === '#/admin-login') {
+    return 'admin-login'
+  }
+
+  if (hash === '#/app') {
+    return 'user-app'
+  }
+
+  if (hash === '#/admin') {
+    return 'admin-app'
+  }
+
+  return 'user-login'
+}
+
+const setHash = (hash: '#/login' | '#/admin-login' | '#/app' | '#/admin') => {
+  window.location.hash = hash
+}
 
 function Providers() {
   return (
@@ -26,6 +48,15 @@ function Providers() {
 
 function App() {
   const today = dayjs().format('YYYY-MM-DD')
+  const [view, setView] = useState<AppView>(() =>
+    typeof window === 'undefined' ? 'user-login' : getViewFromHash(window.location.hash)
+  )
+  const [session, setSession] = useState<Session | null>(null)
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [adminUsername, setAdminUsername] = useState('')
+  const [adminPassword, setAdminPassword] = useState('')
+  const [authError, setAuthError] = useState<string | null>(null)
   const [reportDate, setReportDate] = useState(today)
   const [employeeId, setEmployeeId] = useState('')
   const [trainings, setTrainings] = useState<TrainingFormRow[]>([createEmptyTrainingRow()])
@@ -36,18 +67,44 @@ function App() {
   const [notes, setNotes] = useState('')
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined
+    }
+
+    if (!window.location.hash) {
+      setHash('#/login')
+    }
+
+    const syncView = () => setView(getViewFromHash(window.location.hash))
+    syncView()
+    window.addEventListener('hashchange', syncView)
+
+    return () => window.removeEventListener('hashchange', syncView)
+  }, [])
+
+  let currentView = view
+  if (view === 'user-app' && session?.role !== 'user') {
+    currentView = 'user-login'
+  }
+  if (view === 'admin-app' && session?.role !== 'admin') {
+    currentView = 'admin-login'
+  }
+
   const {
     data: employees = [],
     isFetching: isEmployeesFetching,
     error: employeesError
   } = useQuery<EmployeeDirectoryEntry[]>({
     queryKey: ['employees'],
-    queryFn: fetchEmployees
+    queryFn: fetchEmployees,
+    enabled: currentView === 'user-app'
   })
 
   const { data: reports, isFetching, refetch } = useQuery<ApiDailyReport[]>({
     queryKey: ['reports', reportDate],
-    queryFn: () => fetchReports(reportDate)
+    queryFn: () => fetchReports(reportDate),
+    enabled: currentView === 'user-app'
   })
 
   const reportMonth = useMemo(() => reportDate.slice(0, 7), [reportDate])
@@ -122,8 +179,192 @@ function App() {
     }
   }
 
+  const openUserLogin = () => {
+    setAuthError(null)
+    setHash('#/login')
+  }
+
+  const openAdminLogin = () => {
+    setAuthError(null)
+    setHash('#/admin-login')
+  }
+
+  const handleUserLogin = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    if (!username.trim() || !password) {
+      setAuthError('Enter a username and password.')
+      return
+    }
+
+    setSession({ role: 'user', username: username.trim() })
+    setAuthError(null)
+    setToast(null)
+    setHash('#/app')
+  }
+
+  const handleAdminLogin = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    if (!adminUsername.trim() || !adminPassword) {
+      setAuthError('Enter an admin username and password.')
+      return
+    }
+
+    setSession({ role: 'admin', username: adminUsername.trim() })
+    setAuthError(null)
+    setToast(null)
+    setHash('#/admin')
+  }
+
+  const handleLogout = () => {
+    const nextHash = session?.role === 'admin' ? '#/admin-login' : '#/login'
+    setSession(null)
+    setAuthError(null)
+    setToast(null)
+    setHash(nextHash)
+  }
+
+  if (currentView === 'user-login') {
+    return (
+      <div className="auth-shell">
+        <section className="panel auth-panel">
+          <p className="eyebrow">Hub Access</p>
+          <h1>User Login</h1>
+          <p className="auth-copy">Sign in to continue into the reconstructed DSR workspace.</p>
+
+          <form className="auth-form" onSubmit={handleUserLogin}>
+            <label>
+              Username
+              <input
+                type="text"
+                value={username}
+                onChange={(event) => {
+                  setUsername(event.target.value)
+                  setAuthError(null)
+                }}
+                placeholder="Enter your username"
+              />
+            </label>
+
+            <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value)
+                  setAuthError(null)
+                }}
+                placeholder="Enter your password"
+              />
+            </label>
+
+            {authError ? <p className="notice error auth-notice">{authError}</p> : null}
+
+            <div className="auth-actions">
+              <button type="button" className="ghost" onClick={openAdminLogin}>
+                Login as admin
+              </button>
+              <button type="submit" className="primary" disabled={!username.trim() || !password}>
+                Login
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+    )
+  }
+
+  if (currentView === 'admin-login') {
+    return (
+      <div className="auth-shell">
+        <section className="panel auth-panel">
+          <p className="eyebrow">Hub Access</p>
+          <h1>Admin Login</h1>
+          <p className="auth-copy">Use the admin entry point to manage the reconstructed application.</p>
+
+          <form className="auth-form" onSubmit={handleAdminLogin}>
+            <label>
+              Username
+              <input
+                type="text"
+                value={adminUsername}
+                onChange={(event) => {
+                  setAdminUsername(event.target.value)
+                  setAuthError(null)
+                }}
+                placeholder="Enter your admin username"
+              />
+            </label>
+
+            <label>
+              Password
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(event) => {
+                  setAdminPassword(event.target.value)
+                  setAuthError(null)
+                }}
+                placeholder="Enter your admin password"
+              />
+            </label>
+
+            {authError ? <p className="notice error auth-notice">{authError}</p> : null}
+
+            <div className="auth-actions">
+              <button type="button" className="ghost" onClick={openUserLogin}>
+                Back to user login
+              </button>
+              <button type="submit" className="primary" disabled={!adminUsername.trim() || !adminPassword}>
+                Login
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+    )
+  }
+
+  if (currentView === 'admin-app') {
+    return (
+      <div className="auth-shell">
+        <section className="panel auth-panel">
+          <p className="eyebrow">Hub Administration</p>
+          <h1>Admin Home</h1>
+          <p className="auth-copy">Admin access is now separated. Further admin stories can build from this entry point.</p>
+
+          <div className="admin-card">
+            <span className="summary-label">Signed in as</span>
+            <strong>{session?.username}</strong>
+          </div>
+
+          <div className="auth-actions">
+            <button type="button" className="ghost" onClick={openUserLogin}>
+              Go to user login
+            </button>
+            <button type="button" className="primary" onClick={handleLogout}>
+              Logout
+            </button>
+          </div>
+        </section>
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell">
+      <div className="workspace-bar panel">
+        <div>
+          <p className="eyebrow">Signed In</p>
+          <strong>{session?.username}</strong>
+        </div>
+        <button className="ghost" onClick={handleLogout}>
+          Logout
+        </button>
+      </div>
+
       <div className="field-grid">
         <section className="panel form-panel">
           <header>
