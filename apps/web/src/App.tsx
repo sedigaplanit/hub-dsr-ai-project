@@ -3,11 +3,17 @@ import { QueryClient, QueryClientProvider, useMutation, useQuery } from '@tansta
 import dayjs from 'dayjs'
 import type { DailyReportPayload, TrainingStatus } from '@shared'
 import {
-  fetchReports,
-  submitReport,
+  assignTodayDsrOwner,
+  createUserAccount,
+  deleteUserAccount,
   downloadMonthlyWorkbook,
+  fetchAdminUsers,
   fetchEmployees,
+  fetchReports,
+  login,
+  submitReport,
   type ApiDailyReport,
+  type AuthSession,
   type EmployeeDirectoryEntry
 } from './lib/api'
 import { createEmptyTrainingRow, statusPalette } from './lib/dsr-helpers'
@@ -16,7 +22,6 @@ import './App.css'
 const queryClient = new QueryClient()
 type TrainingFormRow = ReturnType<typeof createEmptyTrainingRow>
 type AppView = 'user-login' | 'admin-login' | 'user-app' | 'admin-app'
-type Session = { role: 'user' | 'admin'; username: string }
 
 const getViewFromHash = (hash: string): AppView => {
   if (hash === '#/admin-login') {
@@ -51,12 +56,15 @@ function App() {
   const [view, setView] = useState<AppView>(() =>
     typeof window === 'undefined' ? 'user-login' : getViewFromHash(window.location.hash)
   )
-  const [session, setSession] = useState<Session | null>(null)
+  const [session, setSession] = useState<AuthSession | null>(null)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [adminUsername, setAdminUsername] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
   const [authError, setAuthError] = useState<string | null>(null)
+  const [accountUsername, setAccountUsername] = useState('')
+  const [accountPassword, setAccountPassword] = useState('')
+  const [adminError, setAdminError] = useState<string | null>(null)
   const [reportDate, setReportDate] = useState(today)
   const [employeeId, setEmployeeId] = useState('')
   const [trainings, setTrainings] = useState<TrainingFormRow[]>([createEmptyTrainingRow()])
@@ -84,27 +92,40 @@ function App() {
   }, [])
 
   let currentView = view
-  if (view === 'user-app' && session?.role !== 'user') {
+  if (view === 'user-app' && session?.account.role !== 'user') {
     currentView = 'user-login'
   }
-  if (view === 'admin-app' && session?.role !== 'admin') {
+  if (view === 'admin-app' && session?.account.role !== 'admin') {
     currentView = 'admin-login'
   }
+
+  const token = session?.token ?? ''
 
   const {
     data: employees = [],
     isFetching: isEmployeesFetching,
     error: employeesError
   } = useQuery<EmployeeDirectoryEntry[]>({
-    queryKey: ['employees'],
-    queryFn: fetchEmployees,
-    enabled: currentView === 'user-app'
+    queryKey: ['employees', token],
+    queryFn: () => fetchEmployees(token),
+    enabled: currentView === 'user-app' && Boolean(token)
   })
 
   const { data: reports, isFetching, refetch } = useQuery<ApiDailyReport[]>({
-    queryKey: ['reports', reportDate],
-    queryFn: () => fetchReports(reportDate),
-    enabled: currentView === 'user-app'
+    queryKey: ['reports', token, reportDate],
+    queryFn: () => fetchReports(token, reportDate),
+    enabled: currentView === 'user-app' && Boolean(token)
+  })
+
+  const {
+    data: adminUsers,
+    isFetching: isAdminUsersFetching,
+    error: adminUsersError,
+    refetch: refetchAdminUsers
+  } = useQuery({
+    queryKey: ['admin-users', token],
+    queryFn: () => fetchAdminUsers(token),
+    enabled: currentView === 'admin-app' && session?.account.role === 'admin' && Boolean(token)
   })
 
   const reportMonth = useMemo(() => reportDate.slice(0, 7), [reportDate])
@@ -114,8 +135,13 @@ function App() {
     [employees, employeeId]
   )
 
+  const assignedUser = useMemo(
+    () => adminUsers?.users.find((user) => user.id === adminUsers.todayAssigneeId) ?? null,
+    [adminUsers]
+  )
+
   const mutation = useMutation({
-    mutationFn: (payload: DailyReportPayload) => submitReport(payload),
+    mutationFn: (payload: DailyReportPayload) => submitReport(token, payload),
     onSuccess: () => {
       setToast({ message: 'DSR saved successfully', tone: 'success' })
       refetch()
@@ -173,7 +199,7 @@ function App() {
 
   const handleDownload = async () => {
     try {
-      await downloadMonthlyWorkbook(reportMonth)
+      await downloadMonthlyWorkbook(token, reportMonth)
     } catch (error) {
       setToast({ message: (error as Error).message, tone: 'error' })
     }
@@ -189,7 +215,7 @@ function App() {
     setHash('#/admin-login')
   }
 
-  const handleUserLogin = (event: FormEvent<HTMLFormElement>) => {
+  const handleUserLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     if (!username.trim() || !password) {
@@ -197,13 +223,19 @@ function App() {
       return
     }
 
-    setSession({ role: 'user', username: username.trim() })
-    setAuthError(null)
-    setToast(null)
-    setHash('#/app')
+    try {
+      const nextSession = await login('user', username, password)
+      setSession(nextSession)
+      setAuthError(null)
+      setToast(null)
+      setPassword('')
+      setHash('#/app')
+    } catch (error) {
+      setAuthError((error as Error).message)
+    }
   }
 
-  const handleAdminLogin = (event: FormEvent<HTMLFormElement>) => {
+  const handleAdminLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     if (!adminUsername.trim() || !adminPassword) {
@@ -211,18 +243,78 @@ function App() {
       return
     }
 
-    setSession({ role: 'admin', username: adminUsername.trim() })
-    setAuthError(null)
-    setToast(null)
-    setHash('#/admin')
+    try {
+      const nextSession = await login('admin', adminUsername, adminPassword)
+      setSession(nextSession)
+      setAuthError(null)
+      setToast(null)
+      setAdminPassword('')
+      setHash('#/admin')
+    } catch (error) {
+      setAuthError((error as Error).message)
+    }
   }
 
   const handleLogout = () => {
-    const nextHash = session?.role === 'admin' ? '#/admin-login' : '#/login'
+    const nextHash = session?.account.role === 'admin' ? '#/admin-login' : '#/login'
     setSession(null)
     setAuthError(null)
+    setAdminError(null)
     setToast(null)
+    queryClient.clear()
     setHash(nextHash)
+  }
+
+  const handleCreateUser = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    if (!token) {
+      setAdminError('Admin session missing.')
+      return
+    }
+
+    try {
+      await createUserAccount(token, accountUsername, accountPassword)
+      setAccountUsername('')
+      setAccountPassword('')
+      setAdminError(null)
+      setToast({ message: `User ${accountUsername.trim().toLowerCase()} created.`, tone: 'success' })
+      await refetchAdminUsers()
+    } catch (error) {
+      setAdminError((error as Error).message)
+    }
+  }
+
+  const handleAssignUser = async (userId: string) => {
+    if (!token) {
+      setAdminError('Admin session missing.')
+      return
+    }
+
+    try {
+      const result = await assignTodayDsrOwner(token, userId)
+      setAdminError(null)
+      setToast({ message: result.message, tone: 'success' })
+      await refetchAdminUsers()
+    } catch (error) {
+      setAdminError((error as Error).message)
+    }
+  }
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!token) {
+      setAdminError('Admin session missing.')
+      return
+    }
+
+    try {
+      const result = await deleteUserAccount(token, userId)
+      setAdminError(null)
+      setToast({ message: result.message, tone: 'success' })
+      await refetchAdminUsers()
+    } catch (error) {
+      setAdminError((error as Error).message)
+    }
   }
 
   if (currentView === 'user-login') {
@@ -231,7 +323,7 @@ function App() {
         <section className="panel auth-panel">
           <p className="eyebrow">Hub Access</p>
           <h1>User Login</h1>
-          <p className="auth-copy">Sign in to continue into the reconstructed DSR workspace.</p>
+          <p className="auth-copy">Sign in with a user account created by the admin.</p>
 
           <form className="auth-form" onSubmit={handleUserLogin}>
             <label>
@@ -282,7 +374,8 @@ function App() {
         <section className="panel auth-panel">
           <p className="eyebrow">Hub Access</p>
           <h1>Admin Login</h1>
-          <p className="auth-copy">Use the admin entry point to manage the reconstructed application.</p>
+          <p className="auth-copy">Admin access is required to create users, set passwords, and assign today's DSR owner.</p>
+          <p className="helper-text">Default backend admin credentials are <code>admin</code> / <code>admin123</code> unless overridden in API env.</p>
 
           <form className="auth-form" onSubmit={handleAdminLogin}>
             <label>
@@ -329,18 +422,13 @@ function App() {
 
   if (currentView === 'admin-app') {
     return (
-      <div className="auth-shell">
-        <section className="panel auth-panel">
-          <p className="eyebrow">Hub Administration</p>
-          <h1>Admin Home</h1>
-          <p className="auth-copy">Admin access is now separated. Further admin stories can build from this entry point.</p>
-
-          <div className="admin-card">
-            <span className="summary-label">Signed in as</span>
-            <strong>{session?.username}</strong>
+      <div className="app-shell">
+        <div className="workspace-bar panel">
+          <div>
+            <p className="eyebrow">Hub Administration</p>
+            <strong>{session?.account.username}</strong>
           </div>
-
-          <div className="auth-actions">
+          <div className="auth-actions compact-actions">
             <button type="button" className="ghost" onClick={openUserLogin}>
               Go to user login
             </button>
@@ -348,7 +436,106 @@ function App() {
               Logout
             </button>
           </div>
-        </section>
+        </div>
+
+        <div className="admin-grid">
+          <section className="panel admin-panel">
+            <div>
+              <p className="eyebrow">Account Creation</p>
+              <h2>Create User Account</h2>
+              <p className="helper-text">Only the admin can create user accounts and passwords.</p>
+            </div>
+
+            <form className="account-form" onSubmit={handleCreateUser}>
+              <label>
+                Username
+                <input
+                  type="text"
+                  value={accountUsername}
+                  onChange={(event) => {
+                    setAccountUsername(event.target.value)
+                    setAdminError(null)
+                  }}
+                  placeholder="Enter a new username"
+                />
+              </label>
+
+              <label>
+                Password
+                <input
+                  type="password"
+                  value={accountPassword}
+                  onChange={(event) => {
+                    setAccountPassword(event.target.value)
+                    setAdminError(null)
+                  }}
+                  placeholder="Set a password"
+                />
+              </label>
+
+              {adminError ? <p className="notice error auth-notice">{adminError}</p> : null}
+              {adminUsersError ? <p className="notice error auth-notice">{(adminUsersError as Error).message}</p> : null}
+
+              <button type="submit" className="primary" disabled={!accountUsername.trim() || !accountPassword}>
+                Create user
+              </button>
+            </form>
+
+            <div className="assignment-card">
+              <span className="summary-label">Today's DSR owner</span>
+              <strong>{assignedUser?.username ?? 'Not assigned yet'}</strong>
+              <p className="helper-text">
+                {assignedUser
+                  ? `${assignedUser.username} is responsible for sending today's DSR report.`
+                  : 'Assign one user to own today\'s DSR submission.'}
+              </p>
+            </div>
+          </section>
+
+          <section className="panel admin-panel">
+            <div>
+              <p className="eyebrow">User Accounts</p>
+              <h2>Manage Users</h2>
+              <p className="helper-text">Create, appoint, and delete user accounts from this panel.</p>
+            </div>
+
+            {isAdminUsersFetching ? <p className="helper-text">Loading users…</p> : null}
+
+            {adminUsers?.users.length ? (
+              <ul className="account-list">
+                {adminUsers.users.map((account) => {
+                  const isAssigned = account.id === adminUsers.todayAssigneeId
+                  return (
+                    <li key={account.id} className={isAssigned ? 'account-row active' : 'account-row'}>
+                      <div className="account-meta">
+                        <strong>{account.username}</strong>
+                        <p>Created by {account.createdBy ?? 'system'}</p>
+                        <p>{isAssigned ? `Assigned for ${adminUsers.todayDate}` : 'Not assigned today'}</p>
+                      </div>
+
+                      <div className="account-actions">
+                        <button type="button" className="ghost" onClick={() => handleAssignUser(account.id)}>
+                          {isAssigned ? 'Assigned' : 'Assign today'}
+                        </button>
+                        <button type="button" className="danger" onClick={() => handleDeleteUser(account.id)}>
+                          Delete user
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <p className="helper-text">No user accounts yet. Create one from the form on the left.</p>
+            )}
+          </section>
+        </div>
+
+        {toast ? (
+          <div className={`toast ${toast.tone}`} onAnimationEnd={() => setToast(null)}>
+            {toast.message}
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -358,7 +545,7 @@ function App() {
       <div className="workspace-bar panel">
         <div>
           <p className="eyebrow">Signed In</p>
-          <strong>{session?.username}</strong>
+          <strong>{session?.account.username}</strong>
         </div>
         <button className="ghost" onClick={handleLogout}>
           Logout
@@ -381,6 +568,10 @@ function App() {
               </button>
             </div>
           </header>
+
+          {reportDate === today ? (
+            <p className="notice">Only the user assigned by the admin can submit today's DSR.</p>
+          ) : null}
 
           <div className="form-row">
             <label>
@@ -447,10 +638,10 @@ function App() {
                       </button>
                     ) : null}
                   </div>
-                    <label>
-                      Title
-                      <input value={row.title} onChange={(event) => updateTraining(index, 'title', event.target.value)} placeholder="E.g., Azure DevOps course" />
-                    </label>
+                  <label>
+                    Title
+                    <input value={row.title} onChange={(event) => updateTraining(index, 'title', event.target.value)} placeholder="E.g., Azure DevOps course" />
+                  </label>
                   <div className="two-column">
                     <label>
                       Learning Type

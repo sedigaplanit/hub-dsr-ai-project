@@ -9,7 +9,7 @@ const envPath = path.resolve(rootDir, '.env')
 const envConfig = dotenv.config({ path: envPath })
 
 const resolvedApiUrl =
-  process.env.WEB_API_URL || envConfig.parsed?.WEB_API_URL || 'http://127.0.0.1:54321/functions/v1'
+  process.env.WEB_API_URL || envConfig.parsed?.WEB_API_URL || '/api'
 
 module.exports = (_env, argv = {}) => {
   const isProd = argv.mode === 'production'

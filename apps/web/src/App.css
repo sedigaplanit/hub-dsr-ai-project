@@ -59,6 +59,10 @@ body {
   flex-wrap: wrap;
 }
 
+.compact-actions {
+  justify-content: flex-end;
+}
+
 .auth-notice {
   margin-top: 0;
 }
@@ -88,6 +92,12 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 4fr) minmax(280px, 1fr);
   gap: 32px;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 24px;
 }
 
 .panel {
@@ -146,6 +156,12 @@ button.ghost {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+button.danger {
+  background: rgba(255, 85, 85, 0.12);
+  color: #ffb4b4;
+  border: 1px solid rgba(255, 85, 85, 0.25);
+}
+
 button.text {
   background: transparent;
   color: #8daee8;
@@ -181,6 +197,10 @@ textarea {
 
 textarea {
   resize: vertical;
+}
+
+code {
+  color: #b8ebdf;
 }
 
 .form-section {
@@ -224,6 +244,73 @@ textarea {
   margin: 0;
   color: #90a4c8;
   font-size: 0.9rem;
+}
+
+.admin-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.assignment-card {
+  padding: 18px 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(75, 225, 195, 0.2);
+  background: rgba(75, 225, 195, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assignment-card strong {
+  color: #f7f8fc;
+  font-size: 1.1rem;
+}
+
+.account-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.account-row {
+  padding: 18px 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(8, 12, 24, 0.9);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.account-row.active {
+  border-color: rgba(75, 225, 195, 0.45);
+  background: rgba(75, 225, 195, 0.08);
+}
+
+.account-meta strong {
+  color: #f7f8fc;
+}
+
+.account-meta p {
+  margin: 4px 0 0;
+  color: #90a4c8;
+}
+
+.account-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .section-heading {
@@ -383,6 +470,11 @@ textarea {
   color: #ffb4b4;
 }
 
+.notice.success {
+  background: rgba(83, 255, 193, 0.12);
+  color: #7af2c7;
+}
+
 .toast {
   position: fixed;
   bottom: 32px;
@@ -425,6 +517,10 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+
   .panel {
     padding: 24px;
   }
@@ -436,7 +532,8 @@ textarea {
 
   .workspace-bar,
   .admin-card,
-  .auth-actions {
+  .auth-actions,
+  .account-row {
     flex-direction: column;
     align-items: stretch;
   }

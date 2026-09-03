@@ -1,5 +1,8 @@
 project_id = "hub-dsr"
 
+[functions.api]
+verify_jwt = false
+
 [functions.employees-list]
 verify_jwt = false
 

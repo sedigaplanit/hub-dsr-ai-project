@@ -25,7 +25,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      WEB_API_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1
+      WEB_API_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/api
       WEB_PUBLIC_PATH: /${{ github.event.repository.name }}/
 
     steps:

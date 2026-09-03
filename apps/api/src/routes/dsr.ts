@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { DailyReportSchema } from '../shared/index.js'
+import { requireAuth, requireUser } from '../middleware/auth.js'
+import { assertUserCanSubmitReport } from '../services/accountService.js'
 import { saveDailyReport, getReportsByDate, listEmployees } from '../services/dsrService.js'
 import { buildWorkbookBuffer } from '../services/exporter.js'
 
@@ -12,7 +14,7 @@ const DateQuerySchema = z.object({
     .regex(/\d{4}-\d{2}-\d{2}/, 'date query param must be YYYY-MM-DD')
 })
 
-router.get('/employees', async (_req, res) => {
+router.get('/employees', requireAuth, async (_req, res) => {
   try {
     const employees = await listEmployees()
     res.json(employees)
@@ -21,21 +23,22 @@ router.get('/employees', async (_req, res) => {
   }
 })
 
-router.post('/dsr', async (req, res) => {
+router.post('/dsr', requireUser, async (req, res) => {
   const parsed = DailyReportSchema.safeParse(req.body)
   if (!parsed.success) {
     return res.status(400).json({ message: 'Invalid payload', issues: parsed.error.issues })
   }
 
   try {
+    await assertUserCanSubmitReport(req.auth!.id, parsed.data.reportDate)
     const report = await saveDailyReport(parsed.data)
     res.status(201).json(report)
   } catch (error) {
-    res.status(500).json({ message: (error as Error).message })
+    res.status(400).json({ message: (error as Error).message })
   }
 })
 
-router.get('/dsr', async (req, res) => {
+router.get('/dsr', requireAuth, async (req, res) => {
   const parsed = DateQuerySchema.safeParse(req.query)
   if (!parsed.success) {
     return res.status(400).json({ message: 'Invalid query', issues: parsed.error.issues })
@@ -49,7 +52,7 @@ router.get('/dsr', async (req, res) => {
   }
 })
 
-router.get('/export/dsr', async (req, res) => {
+router.get('/export/dsr', requireAuth, async (req, res) => {
   const parsed = DateQuerySchema.safeParse(req.query)
   if (!parsed.success) {
     return res.status(400).json({ message: 'Invalid query', issues: parsed.error.issues })

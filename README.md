@@ -1,14 +1,14 @@
 # Hub DSR Platform
 
-Hub bench reporting app with a GitHub Pages frontend and Supabase-backed data/export pipeline.
+Hub bench reporting app with a GitHub Pages frontend and Supabase-backed API/data/export pipeline.
 
 ## Current Architecture
 
 - Frontend: React 19 + Webpack, deployed to a GitHub Pages project site
-- Backend: Supabase Edge Functions for employee lookup, DSR save/list, and monthly Excel export
+- Backend: Supabase Edge Functions, with `api` as the main frontend-facing endpoint for auth, admin, DSR, and export flows
 - Database: Supabase Postgres via `supabase/migrations/0001_init.sql`
 - Shared logic: `packages/shared/src`
-- Legacy reference path: `apps/api` still exists in the repo, but the active deployment target is Supabase Edge Functions
+- Local-only Express reference path: `apps/api` still exists for local development, but the active deployment target is Supabase Edge Functions
 
 ## What The App Does
 
@@ -34,24 +34,32 @@ cp .env.example .env
 
 Fill `.env` with your local or hosted Supabase values.
 
-For local frontend work against Supabase functions:
+For local frontend work against the Express dev API:
+
+```bash
+npm run dev
+```
+
+For local frontend work against Supabase functions instead:
 
 ```bash
 supabase start
-npm run web:dev
+WEB_API_URL=http://127.0.0.1:54321/functions/v1/api npm run web:dev
 ```
 
-Default local function URL: `http://127.0.0.1:54321/functions/v1`
+If you prefer `.env`, set `WEB_API_URL=http://127.0.0.1:54321/functions/v1/api` before starting the web app.
 
 ## Database
 
-`supabase/migrations/0001_init.sql` creates:
+`supabase/migrations/0001_init.sql` creates the core DSR tables, and `supabase/migrations/0002_auth_accounts.sql` adds app-managed auth/account tables:
 
 - `employees`
 - `daily_reports`
 - `training_tasks`
 - `certification_progress`
 - `dsr_flattened`
+- `app_users`
+- `dsr_assignments`
 
 Apply locally:
 
@@ -69,12 +77,13 @@ The UI expects the `employees` table to contain roster data before submissions c
 
 ## Edge Functions
 
-- `employees-list`: public roster lookup for the frontend
-- `dsr`: public GET/POST DSR endpoint
-- `dsr-export-month`: public monthly workbook download endpoint
+- `api`: frontend-facing auth, admin, employee, DSR, and workbook routes
+- `employees-list`: legacy roster lookup endpoint
+- `dsr`: legacy GET/POST DSR endpoint
+- `dsr-export-month`: legacy monthly workbook download endpoint
 - `purge-old-dsrs`: authenticated maintenance function for 7-day retention
 
-Public function JWT checks are disabled in `supabase/config.toml` because the frontend is hosted on GitHub Pages and does not use Supabase Auth yet.
+Public function JWT checks are disabled in `supabase/config.toml` because the frontend is hosted on GitHub Pages and uses app-managed auth instead of Supabase Auth.
 
 ## Monthly Export Rules
 
@@ -96,7 +105,7 @@ Required GitHub secret:
 
 The workflow computes:
 
-- `WEB_API_URL=https://<project-ref>.supabase.co/functions/v1`
+- `WEB_API_URL=https://<project-ref>.supabase.co/functions/v1/api`
 - `WEB_PUBLIC_PATH=/<repo>/`
 
 ### Supabase
@@ -113,6 +122,16 @@ Optional GitHub repository variables:
 
 - `DSR_TEMPLATE_BUCKET` default: `templates`
 - `DSR_TEMPLATE_OBJECT_PATH` default: `Hub_DSR_Template.xlsx`
+- `AUTH_TOKEN_TTL_HOURS` default: `12`
+- `BOOTSTRAP_ADMIN_USERNAME` default: `admin`
+
+Required additional GitHub secrets for app-managed auth:
+
+- `AUTH_TOKEN_SECRET`
+
+Optional additional GitHub secrets:
+
+- `BOOTSTRAP_ADMIN_PASSWORD` default: `admin123`
 
 The workflow automatically sets `CORS_ORIGIN` to the GitHub Pages project-site URL.
 

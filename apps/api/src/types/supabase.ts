@@ -23,6 +23,26 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['employees']['Insert']>
         Relationships: []
       }
+      app_users: {
+        Row: {
+          id: string
+          username: string
+          password_hash: string
+          role: string
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          username: string
+          password_hash: string
+          role: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['app_users']['Insert']>
+        Relationships: []
+      }
       daily_reports: {
         Row: {
           id: string
@@ -93,6 +113,20 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['certification_progress']['Insert']>
+        Relationships: []
+      }
+      dsr_assignments: {
+        Row: {
+          report_date: string
+          user_id: string
+          created_at: string
+        }
+        Insert: {
+          report_date: string
+          user_id: string
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['dsr_assignments']['Insert']>
         Relationships: []
       }
     }
