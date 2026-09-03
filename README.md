@@ -133,7 +133,7 @@ Optional additional GitHub secrets:
 
 - `BOOTSTRAP_ADMIN_PASSWORD` default: `admin123`
 
-The workflow automatically sets `CORS_ORIGIN` to the GitHub Pages project-site URL.
+The workflow automatically sets `CORS_ORIGIN` to the GitHub Pages site origin, for example `https://<owner>.github.io`.
 
 ## Scripts
 
