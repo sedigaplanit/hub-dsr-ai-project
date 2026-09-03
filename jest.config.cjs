@@ -13,7 +13,7 @@ module.exports = {
     ]
   },
   moduleNameMapper: {
-    '^@shared(.*)$': '<rootDir>/apps/api/src/shared$1',
+    '^@shared(.*)$': '<rootDir>/packages/shared/src$1',
     '\\.(css)$': '<rootDir>/jest/styleMock.js',
     '\\.(gif|ttf|eot|svg|png|jpg|jpeg)$': '<rootDir>/jest/fileMock.js'
   },

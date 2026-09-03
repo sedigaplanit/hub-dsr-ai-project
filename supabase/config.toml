@@ -1,0 +1,10 @@
+project_id = "hub-dsr"
+
+[functions.employees-list]
+verify_jwt = false
+
+[functions.dsr]
+verify_jwt = false
+
+[functions.dsr-export-month]
+verify_jwt = false

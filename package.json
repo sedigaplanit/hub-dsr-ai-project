@@ -8,6 +8,7 @@
     "web:dev": "webpack-dev-server --config apps/web/webpack.config.cjs --mode development",
     "api:dev": "ts-node-dev --respawn --transpile-only --esm apps/api/src/index.ts",
     "build": "npm run web:build && npm run api:build",
+    "gh-pages": "npm run web:build",
     "web:typecheck": "tsc -p apps/web/tsconfig.app.json --noEmit",
     "web:bundle": "webpack --config apps/web/webpack.config.cjs --mode production",
     "web:build": "npm run web:typecheck && npm run web:bundle",
@@ -31,8 +32,8 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.54.2",
-    "zustand": "^5.0.3",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "zustand": "^5.0.3"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
@@ -47,6 +48,7 @@
     "npm-run-all": "^4.1.5",
     "oxlint": "^1.79.0",
     "style-loader": "^4.0.0",
+    "supabase": "^2.116.0",
     "ts-jest": "^29.3.4",
     "ts-loader": "^9.5.1",
     "ts-node-dev": "^2.0.0",

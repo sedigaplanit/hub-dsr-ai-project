@@ -1,78 +1,125 @@
 # Hub DSR Platform
 
-Production-ready starter for Hub bench teams to capture Daily Status Reports (DSRs), enforce certification rules, and export the official Excel ledger.
+Hub bench reporting app with a GitHub Pages frontend and Supabase-backed data/export pipeline.
 
-## Stack
+## Current Architecture
 
-- **Frontend**: React 19 + Webpack 5 dev server, TanStack Query, Zustand-lite state, custom gradient UI
-- **Backend**: Express + TypeScript with Supabase client, ExcelJS export pipeline
-- **Shared**: `apps/api/src/shared` centralizes schemas, enums, and Excel column mapping used by both layers
-- **Supabase**: Postgres tables + Edge Function (`purge-old-dsrs`) to enforce 7-day retention
+- Frontend: React 19 + Webpack, deployed to a GitHub Pages project site
+- Backend: Supabase Edge Functions for employee lookup, DSR save/list, and monthly Excel export
+- Database: Supabase Postgres via `supabase/migrations/0001_init.sql`
+- Shared logic: `packages/shared/src`
+- Legacy reference path: `apps/api` still exists in the repo, but the active deployment target is Supabase Edge Functions
+
+## What The App Does
+
+- Saves one DSR per employee per day
+- Lists reports for a selected date
+- Exports one workbook per month from Supabase data
+- Creates one worksheet per recorded day in that month
+- Preserves the official workbook styling when the template exists in Supabase Storage
 
 ## Prerequisites
 
 - Node.js 20+
-- Supabase project (free tier is enough)
-- Excel template copied to `resources/templates/Hub_DSR_Template.xlsx` (use the official Hub DSR workbook)
+- A Supabase project
+- Supabase CLI
+- The official Hub workbook uploaded to Supabase Storage as `templates/Hub_DSR_Template.xlsx` unless you intentionally want the simplified fallback sheet
 
-## Getting Started
+## Local Setup
 
 ```bash
 npm install
-cp .env.example .env        # fill with Supabase + API values
-npm run dev                 # starts Webpack dev server + API concurrently
+cp .env.example .env
 ```
 
-Frontend expects `WEB_API_URL` to point at the API (`http://localhost:4000/api` by default).
-The DSR form now loads employees from `GET /api/employees`, so seed the `employees` table before using the app.
+Fill `.env` with your local or hosted Supabase values.
 
-## Database Schema
-
-`supabase/migrations/0001_init.sql` provisions the following entities:
-
-- `employees`: master roster for bench associates
-- `daily_reports`: one row per employee per date (cv status + notes)
-- `training_tasks`: child rows storing detailed upskilling entries
-- `certification_progress`: ISTQB/CAE status snapshot tied to a report
-
-Apply with the Supabase CLI:
+For local frontend work against Supabase functions:
 
 ```bash
-supabase migration up
+supabase start
+npm run web:dev
 ```
 
-## Excel Export
+Default local function URL: `http://127.0.0.1:54321/functions/v1`
 
-`apps/api` loads the Hub template from `DSR_TEMPLATE_PATH`, injects rows with canonical colors (light green for `completed`, orange for `hold`), and enforces:
+## Database
 
-1. ISTQB + CAE both done → `Done`
-2. Single certificate done → `ISTQB - Done & CAE yet to complete (Target …)` style strings
-3. CV submitted without review feedback → `Done`, otherwise `Sent for Review`
-4. Tasks auto-complete when ETA equals report date
-5. Rows completed before the previous day are suppressed in exports
+`supabase/migrations/0001_init.sql` creates:
 
-GET `GET /api/export/dsr?date=YYYY-MM-DD` returns the `.xlsx` ready for leadership.
+- `employees`
+- `daily_reports`
+- `training_tasks`
+- `certification_progress`
+- `dsr_flattened`
 
-## Retention (Last 7 Days)
-
-Supabase Edge Function `supabase/functions/purge-old-dsrs` deletes rows older than 7 days (child tables first). Deploy:
+Apply locally:
 
 ```bash
-supabase functions deploy purge-old-dsrs --project-ref <your-ref>
+supabase db reset
 ```
 
-Schedule it via an external cron (GitHub Action, Cloud Scheduler, etc.) that `POST`s to the function URL with the service key.
+Push to the linked hosted project:
+
+```bash
+supabase db push
+```
+
+The UI expects the `employees` table to contain roster data before submissions can be created.
+
+## Edge Functions
+
+- `employees-list`: public roster lookup for the frontend
+- `dsr`: public GET/POST DSR endpoint
+- `dsr-export-month`: public monthly workbook download endpoint
+- `purge-old-dsrs`: authenticated maintenance function for 7-day retention
+
+Public function JWT checks are disabled in `supabase/config.toml` because the frontend is hosted on GitHub Pages and does not use Supabase Auth yet.
+
+## Monthly Export Rules
+
+- `month` query param uses `YYYY-MM`
+- each workbook includes one worksheet per recorded `report_date`
+- tasks with ETA equal to the report date are auto-completed on save
+- already-completed tasks from earlier dates are excluded from later exports
+- certification and CV labels follow the shared business rules in `packages/shared/src`
+
+## Deployment
+
+### GitHub Pages
+
+`.github/workflows/deploy-pages.yml` builds `apps/web/dist` and deploys it to the repository project site.
+
+Required GitHub secret:
+
+- `SUPABASE_PROJECT_REF`
+
+The workflow computes:
+
+- `WEB_API_URL=https://<project-ref>.supabase.co/functions/v1`
+- `WEB_PUBLIC_PATH=/<repo>/`
+
+### Supabase
+
+`.github/workflows/deploy-supabase.yml` links the hosted project, pushes migrations, syncs function secrets, and deploys the Edge Functions.
+
+Required GitHub secrets:
+
+- `SUPABASE_ACCESS_TOKEN`
+- `SUPABASE_PROJECT_REF`
+- `SUPABASE_DB_PASSWORD`
+
+Optional GitHub repository variables:
+
+- `DSR_TEMPLATE_BUCKET` default: `templates`
+- `DSR_TEMPLATE_OBJECT_PATH` default: `Hub_DSR_Template.xlsx`
+
+The workflow automatically sets `CORS_ORIGIN` to the GitHub Pages project-site URL.
 
 ## Scripts
 
-- `npm run dev` – Webpack dev server + ts-node-dev API watcher
-- `npm run build` – type-check + production builds (web bundle + API)
-- `npm run lint` – TypeScript project references
-- `npm test` – Jest (jsdom)
-
-## Next Steps
-
-- Wire authentication (Supabase OAuth / SSO)
-- Add employee directory picker in the UI
-- Persist toast + validation states across navigation
-- Extend CI with Jest/API contract tests and Excel snapshot assertions
+- `npm run dev` - legacy web + Express local stack
+- `npm run web:dev` - frontend only
+- `npm run build` - web build plus legacy API TypeScript build
+- `npm run lint` - web lint plus API type-check lint
+- `npm test` - Jest

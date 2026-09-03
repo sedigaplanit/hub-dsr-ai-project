@@ -1,6 +1,6 @@
 import type { DailyReportPayload } from '@shared'
 
-const API_BASE_URL = (process.env.WEB_API_URL ?? 'http://localhost:4000/api').replace(/\/$/, '')
+const API_BASE_URL = (process.env.WEB_API_URL ?? 'http://127.0.0.1:54321/functions/v1').replace(/\/$/, '')
 
 export interface EmployeeDirectoryEntry {
   id: string
@@ -47,7 +47,13 @@ export interface ApiDailyReport {
 const parseResponse = async (response: Response) => {
   if (!response.ok) {
     const message = await response.text()
-    throw new Error(message || 'Unable to complete request')
+    let parsedMessage: string | undefined
+
+    try {
+      parsedMessage = (JSON.parse(message) as { message?: string }).message
+    } catch {}
+
+    throw new Error(parsedMessage || message || 'Unable to complete request')
   }
   return response
 }
@@ -64,7 +70,7 @@ export async function submitReport(payload: DailyReportPayload) {
 }
 
 export async function fetchEmployees(): Promise<EmployeeDirectoryEntry[]> {
-  const response = await parseResponse(await fetch(`${API_BASE_URL}/employees`))
+  const response = await parseResponse(await fetch(`${API_BASE_URL}/employees-list`))
   return response.json()
 }
 
@@ -73,13 +79,15 @@ export async function fetchReports(date: string): Promise<ApiDailyReport[]> {
   return response.json()
 }
 
-export async function downloadWorkbook(date: string) {
-  const response = await parseResponse(await fetch(`${API_BASE_URL}/export/dsr?date=${date}`))
+export async function downloadMonthlyWorkbook(month: string) {
+  const response = await parseResponse(
+    await fetch(`${API_BASE_URL}/dsr-export-month?month=${encodeURIComponent(month)}`)
+  )
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `hub-dsr-${date}.xlsx`
+  anchor.download = `hub-dsr-${month}.xlsx`
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()

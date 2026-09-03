@@ -3,8 +3,8 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@shared": ["../api/src/shared/index.ts"],
-      "@shared/*": ["../api/src/shared/*"]
+      "@shared": ["../../packages/shared/src/index.ts"],
+      "@shared/*": ["../../packages/shared/src/*"]
     },
     "module": "commonjs",
     "moduleResolution": "node",
@@ -14,5 +14,5 @@
     "allowArbitraryExtensions": true,
     "esModuleInterop": true
   },
-  "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.d.ts", "../api/src/shared"]
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.d.ts", "../../packages/shared/src"]
 }

@@ -4,14 +4,17 @@ const webpack = require('webpack')
 const dotenv = require('dotenv')
 
 const rootDir = path.resolve(__dirname, '..', '..')
-const sharedDir = path.resolve(__dirname, '../api/src/shared')
+const sharedDir = path.resolve(__dirname, '../../packages/shared/src')
 const envPath = path.resolve(rootDir, '.env')
 const envConfig = dotenv.config({ path: envPath })
 
-const resolvedApiUrl = process.env.WEB_API_URL || envConfig.parsed?.WEB_API_URL || 'http://localhost:4000/api'
+const resolvedApiUrl =
+  process.env.WEB_API_URL || envConfig.parsed?.WEB_API_URL || 'http://127.0.0.1:54321/functions/v1'
 
 module.exports = (_env, argv = {}) => {
   const isProd = argv.mode === 'production'
+  const resolvedPublicPath =
+    process.env.WEB_PUBLIC_PATH || envConfig.parsed?.WEB_PUBLIC_PATH || (isProd ? 'auto' : '/')
 
   return {
     entry: path.resolve(__dirname, 'src/main.tsx'),
@@ -19,7 +22,7 @@ module.exports = (_env, argv = {}) => {
       filename: isProd ? 'assets/[name].[contenthash].js' : 'assets/[name].js',
       chunkFilename: isProd ? 'assets/[name].[contenthash].js' : 'assets/[name].js',
       path: path.resolve(__dirname, 'dist'),
-      publicPath: '/',
+      publicPath: resolvedPublicPath,
       clean: true
     },
     resolve: {

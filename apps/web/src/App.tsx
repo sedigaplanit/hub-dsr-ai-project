@@ -5,7 +5,7 @@ import type { DailyReportPayload, TrainingStatus } from '@shared'
 import {
   fetchReports,
   submitReport,
-  downloadWorkbook,
+  downloadMonthlyWorkbook,
   fetchEmployees,
   type ApiDailyReport,
   type EmployeeDirectoryEntry
@@ -49,6 +49,8 @@ function App() {
     queryKey: ['reports', reportDate],
     queryFn: () => fetchReports(reportDate)
   })
+
+  const reportMonth = useMemo(() => reportDate.slice(0, 7), [reportDate])
 
   const selectedEmployee = useMemo(
     () => employees.find((employee) => employee.id === employeeId) ?? null,
@@ -114,7 +116,7 @@ function App() {
 
   const handleDownload = async () => {
     try {
-      await downloadWorkbook(reportDate)
+      await downloadMonthlyWorkbook(reportMonth)
     } catch (error) {
       setToast({ message: (error as Error).message, tone: 'error' })
     }
@@ -131,7 +133,7 @@ function App() {
             </div>
             <div className="actions">
               <button className="ghost" onClick={handleDownload}>
-                Download XLSX
+                Download {reportMonth} XLSX
               </button>
               <button className="primary" onClick={handleSubmit} disabled={mutation.isPending || !employeeId}>
                 {mutation.isPending ? 'Saving…' : 'Save DSR'}
